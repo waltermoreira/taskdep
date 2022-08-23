@@ -31,7 +31,7 @@ where
     let mut graph: DiGraph<Node, _> = DiGraph::new();
     let mut nodes = HashMap::new();
     let task_section =
-        &yaml.get("tasks".into()).ok_or(anyhow!("tasks not found"))?;
+        &yaml.get("tasks").ok_or(anyhow!("tasks not found"))?;
     let tasks = task_section
         .as_mapping()
         .ok_or(anyhow!("tasks section is not a mapping"))?;
