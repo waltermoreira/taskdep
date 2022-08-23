@@ -1,0 +1,193 @@
+# Taskfile for webIMG project
+#
+# Get `Task` from https://taskfile.dev/#/installation
+# List all available tasks:
+#
+#     $ task -a
+#
+version: "3"
+
+env:
+  DYLD_FALLBACK_LIBRARY_PATH:
+    sh: > 
+      [ $(uname -s) == "Darwin" ] 
+      && 
+      echo $(xcode-select --print-path)/Toolchains/XcodeDefault.xctoolchain/usr/lib/
+      ||
+      echo ""
+
+tasks:
+  fill-git-hash:
+    run: once
+    cmds:
+      - git rev-parse --short HEAD | tr -d '\n' > webimg/src/commit_hash
+      - "[[ -z $(git status --porcelain) ]] || echo -n ' dirty' >> webimg/src/commit_hash"
+
+  copy-protos:
+    run: when_changed
+    desc: Copy protos to inside the crates
+    cmds:
+      - cp ../protos/webimg.proto webimg/
+      - cp ../protos/webimg.proto webimg_frontend/
+    sources:
+      - ../protos/webimg.proto
+    generates:
+      - webimg/webimg.proto
+      - webimg_frontend/webimg.proto
+
+  copy-frontend:
+    run: when_changed
+    desc: Copy frontend into backend
+    deps:
+      - build-frontend-prod
+    cmds:
+      - rsync -av webimg_frontend/dist webimg/
+    sources:
+      - webimg_frontend/dist
+    generates:
+      - webimg/dist
+
+  build-backend-prod:
+    deps:
+      - fill-git-hash
+      - copy-frontend
+      - copy-protos
+    cmds:
+      - cargo clean --release -p webimg
+      - cargo build --release
+    dir: webimg
+    sources:
+      - ./**/*
+    generates:
+      - ../target/release/webimg
+
+  build-backend:
+    deps:
+      - fill-git-hash
+      - copy-frontend
+      - copy-protos
+    cmds:
+      - cargo clean -p webimg
+      - cargo build
+    dir: webimg
+    sources:
+      - ./**/*
+    generates:
+      - ../target/debug/webimg
+
+  test:
+    deps:
+      - build-backend
+    cmds:
+      - cargo test
+
+  run-backend:
+    deps:
+      - fill-git-hash
+    cmds: 
+      - cargo run {{.CLI_ARGS}}
+    dir: webimg
+
+  build-frontend:
+    deps:
+      - install-js-assets
+      - copy-protos
+    cmds:
+      - trunk build
+    dir: webimg_frontend
+    sources:
+      - "*"
+      - src/**/*.rs
+    generates:
+      - dist/index.html
+
+  build-frontend-prod:
+    deps:
+      - install-js-assets
+      - copy-protos
+    cmds:
+      - trunk build --release
+    dir: webimg_frontend
+    sources:
+      - "*"
+      - src/**/*.rs
+    generates:
+      - dist/index.html
+
+  run-frontend:
+    deps:
+      - install-js-assets
+    cmds:
+      - trunk serve --port 1237
+    dir: webimg_frontend
+
+  run-all:
+    deps:
+      - run-backend
+      - run-frontend
+
+  webimg:
+    deps:
+      - build-backend
+
+  webimg-prod:
+    deps:
+      - build-backend-prod
+
+  install-js-assets:
+    run: once
+    desc: "Install js stuff"
+    dir: webimg_frontend
+    cmds:
+      - npm install
+    status:
+      - test -d node_modules/parcel
+    preconditions:
+      - sh: "command -v npm"
+        msg: "Please, install `npm` with you favorite package manager"
+
+  clean:
+    deps:
+      - clean-frontend
+      - clean-backend
+
+  clean-frontend:
+    cmds:
+      - rm -rf dist parcel-dist
+      - cargo clean -p webimg_frontend
+      - cargo clean --release -p webimg_frontend
+    dir: webimg_frontend
+
+  clean-backend:
+    cmds:
+      - rm -rf dist
+      - cargo clean -p webimg
+      - cargo clean --release -p webimg
+    dir: webimg
+
+  prepare-crate:
+    run: once
+    desc: Run tasks needed to prepare webimg so cargo build works
+    deps:
+      - fill-git-hash
+      - copy-frontend
+      - copy-protos
+
+  prepare-system-deps:
+    run: once
+    desc: Ensure external commands
+    preconditions:
+      - sh: "command -v npm"
+        msg: "Please, install `npm` with your favorite package manager"
+      # - sh: "command -v cmake"
+      #   msg: "Please, install `cmake` with your favorite package manager"
+      - sh: "command -v rsync"
+        msg: "Please, install `rsync` with your favorite package manager"
+
+  install-trunk:
+    run: once
+    desc: Install trunk
+    cmds:
+      - cargo install trunk
+    status:
+      - command -v trunk
