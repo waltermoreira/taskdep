@@ -30,29 +30,33 @@ where
     let yaml: HashMap<String, Value> = serde_yaml::from_reader(f)?;
     let mut graph: DiGraph<Node, _> = DiGraph::new();
     let mut nodes = HashMap::new();
-    let task_section =
-        &yaml.get("tasks").ok_or(anyhow!("tasks not found"))?;
+    let task_section = &yaml
+        .get("tasks")
+        .ok_or_else(|| anyhow!("tasks not found"))?;
     let tasks = task_section
         .as_mapping()
-        .ok_or(anyhow!("tasks section is not a mapping"))?;
+        .ok_or_else(|| anyhow!("tasks section is not a mapping"))?;
     for (task, descr) in tasks {
-        let name = task.as_str().ok_or(anyhow!("task name is not a string"))?;
+        let name = task
+            .as_str()
+            .ok_or_else(|| anyhow!("task name is not a string"))?;
         nodes
             .entry(name)
             .or_insert_with(|| graph.add_node(Node(name.into())));
         let descr = descr
             .as_mapping()
-            .ok_or(anyhow!("task description is not a mapping"))?;
+            .ok_or_else(|| anyhow!("task description is not a mapping"))?;
         if let Some(deps) = descr.get("deps") {
-            let deps =
-                deps.as_sequence().ok_or(anyhow!("deps is not a list"))?;
+            let deps = deps
+                .as_sequence()
+                .ok_or_else(|| anyhow!("deps is not a list"))?;
             for dep in deps {
                 let dep_name = match dep {
                     Value::String(n) => n,
                     Value::Mapping(m) => m
                         .get("task")
                         .and_then(|t| t.as_str())
-                        .ok_or(anyhow!("couldn't find name of task"))?,
+                        .ok_or_else(|| anyhow!("couldn't find name of task"))?,
                     _ => bail!("incorrect type for a dependency"),
                 };
                 nodes
@@ -107,7 +111,10 @@ fn graph_to_image(g: &DiGraph<Node, String>) -> Result<Output> {
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()?;
-    let mut stdin = dot.stdin.take().ok_or(anyhow!("couldn't open stdin"))?;
+    let mut stdin = dot
+        .stdin
+        .take()
+        .ok_or_else(|| anyhow!("couldn't open stdin"))?;
     let stdin_write = thread::spawn(move || {
         stdin
             .write_all(contents.as_bytes())
