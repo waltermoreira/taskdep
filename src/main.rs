@@ -7,6 +7,7 @@ use petgraph::{
     graph::DiGraph,
 };
 use serde_yaml::{self, Value};
+use std::fs::File;
 use std::process::{Command, Output, Stdio};
 use std::thread;
 use std::{
@@ -139,19 +140,24 @@ fn graph_to_image(g: &DiGraph<Node, String>) -> Result<Output> {
 /// Cycles in the graph show in color red.
 struct Args {}
 
-fn main() {
+fn main() -> Result<()> {
     let _args = Args::parse();
-    println!("Hello, world!");
+    let taskfile = File::open("Taskfile.yaml")?;
+    let graph = build_graph(taskfile)?;
+    let image = graph_to_image(&graph)?;
+    if !image.status.success() {
+        bail!("failed to create image: {}", image.status);
+    }
+    let mut image_file = File::create("Taskfile.svg")?;
+    image_file.write_all(&image.stdout)?;
+    Ok(())
 }
 
 #[cfg(test)]
 mod test {
-    use crate::{build_graph, graph_to_image};
+    use crate::build_graph;
     use indoc::indoc;
-    use std::{
-        fs::File,
-        io::{BufReader, Cursor, Result},
-    };
+    use std::io::{Cursor, Result};
 
     #[test]
     fn test_build_graph() -> Result<()> {
@@ -178,26 +184,6 @@ mod test {
         let g = build_graph(yaml).unwrap();
         assert_eq!(g.node_count(), 5);
         assert_eq!(g.edge_count(), 4);
-        Ok(())
-    }
-
-    #[test]
-    fn test_foo() -> Result<()> {
-        let f = File::open("Taskfile.yaml")?;
-        let buf = BufReader::new(f);
-        // let v: Value = serde_yaml::from_reader(buf).unwrap();
-        // let x = v.get("tasks").unwrap();
-        let y = build_graph(buf).unwrap();
-        let _x = graph_to_image(&y);
-        //dbg!(x);
-        //let g = Dot::with_config(&y, &[Config::EdgeNoLabel]);
-        //dbg!(g);
-        // let o = File::create("/tmp/foograph").unwrap();
-        // let mut buf = BufWriter::new(o);
-        // graph_to_dot(&y, &mut buf).unwrap();
-        // dbg!(is_cyclic_directed(&y));
-        // let z = tarjan_scc(&y);
-        // dbg!(z);
         Ok(())
     }
 }
