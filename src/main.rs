@@ -7,7 +7,7 @@ use petgraph::{
     graph::DiGraph,
 };
 use serde_yaml::{self, Value};
-use std::fs::File;
+use std::fs::{File, canonicalize};
 use std::process::{Command, Output, Stdio};
 use std::thread;
 use std::{
@@ -138,10 +138,14 @@ fn graph_to_image(g: &DiGraph<Node, String>) -> Result<Output> {
 ///
 /// Consume `Taskfile.yaml` and generate `Taskfile.svg` showing the dependency graph.
 /// Cycles in the graph show in color red.
-struct Args {}
+struct Args {
+    /// Do not open browser with the image file
+    #[clap(short, long, action)]
+    silent: bool,
+}
 
 fn main() -> Result<()> {
-    let _args = Args::parse();
+    let args = Args::parse();
     let taskfile = File::open("Taskfile.yaml")
         .map_err(|e| anyhow!("Taskfile.yaml: {e}"))?;
     let graph = build_graph(taskfile)?;
@@ -151,6 +155,11 @@ fn main() -> Result<()> {
     }
     let mut image_file = File::create("Taskfile.svg")?;
     image_file.write_all(&image.stdout)?;
+    if !args.silent {
+        let taskfile = canonicalize("Taskfile.svg")?;
+        let url = format!("file://{}", taskfile.to_string_lossy());
+        webbrowser::open(&format!("file://{url}"))?;
+    }
     Ok(())
 }
 
