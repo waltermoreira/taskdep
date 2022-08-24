@@ -142,7 +142,8 @@ struct Args {}
 
 fn main() -> Result<()> {
     let _args = Args::parse();
-    let taskfile = File::open("Taskfile.yaml")?;
+    let taskfile = File::open("Taskfile.yaml")
+        .map_err(|e| anyhow!("Taskfile.yaml: {e}"))?;
     let graph = build_graph(taskfile)?;
     let image = graph_to_image(&graph)?;
     if !image.status.success() {
