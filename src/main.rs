@@ -160,7 +160,7 @@ fn main() -> Result<()> {
     if !args.silent {
         let taskfile = canonicalize("Taskfile.svg")?;
         let url = format!("file://{}", taskfile.to_string_lossy());
-        webbrowser::open(&format!("file://{url}"))?;
+        webbrowser::open(&url)?;
     }
     Ok(())
 }
