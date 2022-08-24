@@ -7,7 +7,7 @@ use petgraph::{
     graph::DiGraph,
 };
 use serde_yaml::{self, Value};
-use std::fs::{File, canonicalize};
+use std::fs::{canonicalize, File};
 use std::process::{Command, Output, Stdio};
 use std::thread;
 use std::{
@@ -88,17 +88,19 @@ fn graph_to_dot(g: &DiGraph<Node, String>) -> String {
             &[Config::EdgeNoLabel],
             &|_g, e| {
                 if comps.contains(&e.source()) && comps.contains(&e.target()) {
-                    "color=\"red\"".into()
+                    "color=\"red\""
                 } else {
-                    "".into()
+                    ""
                 }
+                .into()
             },
             &|_g, (idx, _n)| {
                 if comps.contains(&idx) {
-                    "color=\"red\"".into()
+                    "color=\"red\""
                 } else {
-                    "".into()
+                    ""
                 }
+                .into()
             }
         )
     )
