@@ -17,7 +17,16 @@ env:
       echo ""
 
 tasks:
+  add-wasm-target:
+    deps:
+      - prepare-system-deps
+    run: once
+    cmds:
+      - rustup target add wasm32-unknown-unknown
+
   fill-git-hash:
+    deps:
+      - prepare-system-deps
     run: once
     cmds:
       - git rev-parse --short HEAD | tr -d '\n' > webimg/src/commit_hash
@@ -39,6 +48,7 @@ tasks:
     run: when_changed
     desc: Copy frontend into backend
     deps:
+      - prepare-system-deps
       - build-frontend-prod
     cmds:
       - rsync -av webimg_frontend/dist webimg/
@@ -49,9 +59,9 @@ tasks:
 
   build-backend-prod:
     deps:
+      - copy-protos
       - fill-git-hash
       - copy-frontend
-      - copy-protos
     cmds:
       - cargo clean --release -p webimg
       - cargo build --release
@@ -104,7 +114,9 @@ tasks:
   build-frontend-prod:
     deps:
       - install-js-assets
+      - install-trunk
       - copy-protos
+      - add-wasm-target
     cmds:
       - trunk build --release
     dir: webimg_frontend
@@ -135,6 +147,8 @@ tasks:
       - build-backend-prod
 
   install-js-assets:
+    deps:
+      - prepare-system-deps
     run: once
     desc: "Install js stuff"
     dir: webimg_frontend
@@ -142,9 +156,6 @@ tasks:
       - npm install
     status:
       - test -d node_modules/parcel
-    preconditions:
-      - sh: "command -v npm"
-        msg: "Please, install `npm` with you favorite package manager"
 
   clean:
     deps:
@@ -165,26 +176,24 @@ tasks:
       - cargo clean --release -p webimg
     dir: webimg
 
-  prepare-crate:
-    run: once
-    desc: Run tasks needed to prepare webimg so cargo build works
-    deps:
-      - fill-git-hash
-      - copy-frontend
-      - copy-protos
-
   prepare-system-deps:
     run: once
     desc: Ensure external commands
     preconditions:
       - sh: "command -v npm"
         msg: "Please, install `npm` with your favorite package manager"
-      # - sh: "command -v cmake"
-      #   msg: "Please, install `cmake` with your favorite package manager"
+      - sh: "command -v cmake"
+        msg: "Please, install `cmake` with your favorite package manager"
       - sh: "command -v rsync"
         msg: "Please, install `rsync` with your favorite package manager"
+      - sh: "command -v git"
+        msg: "Please, install `git` with your favorite package manager"
+      - sh: "command -v cargo"
+        msg: "Please, install Rust"
 
   install-trunk:
+    deps:
+      - prepare-system-deps
     run: once
     desc: Install trunk
     cmds:
