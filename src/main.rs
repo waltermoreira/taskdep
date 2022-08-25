@@ -113,7 +113,8 @@ fn graph_to_image(g: &DiGraph<Node, String>) -> Result<Output> {
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        .spawn()?;
+        .spawn()
+        .context("command `dot` not found (please, make sure `graphviz` is installed)")?;
     let mut stdin = dot
         .stdin
         .take()
