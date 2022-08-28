@@ -57,12 +57,11 @@ where
             build_graph(f, &[prefix, &[name.into()]].concat(), nodes, graph)?;
         }
     }
-    let task_section = &yaml
+    let tasks = yaml
         .get("tasks")
-        .ok_or_else(|| anyhow!("tasks not found"))?;
-    let tasks = task_section
+        .ok_or_else(|| anyhow!("tasks not found"))?
         .as_mapping()
-        .ok_or_else(|| anyhow!("tasks section is not a mapping"))?;
+        .ok_or_else(|| anyhow!("tasks is not a mapping"))?;
     for (task, descr) in tasks {
         let name = task
             .as_str()
@@ -71,14 +70,15 @@ where
         nodes
             .entry(name.clone())
             .or_insert_with(|| graph.add_node(Node(name.clone())));
-        let descr = descr
+        if let Some(deps) = descr
             .as_mapping()
-            .ok_or_else(|| anyhow!("task description is not a mapping"))?;
-        if let Some(deps) = descr.get("deps") {
-            let deps = deps
+            .ok_or_else(|| anyhow!("task is not a mapping"))?
+            .get("deps")
+        {
+            for dep in deps
                 .as_sequence()
-                .ok_or_else(|| anyhow!("deps is not a list"))?;
-            for dep in deps {
+                .ok_or_else(|| anyhow!("deps is not a list"))?
+            {
                 let dep_name = match dep {
                     Value::String(n) => n,
                     Value::Mapping(m) => m
