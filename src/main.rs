@@ -1,5 +1,7 @@
 use anyhow::{anyhow, bail, Context, Result};
 use clap::Parser;
+use petgraph::graph::NodeIndex;
+use petgraph::stable_graph::DefaultIx;
 use petgraph::visit::EdgeRef;
 use petgraph::{
     algo::tarjan_scc,
@@ -24,13 +26,37 @@ impl Debug for Node {
     }
 }
 
-fn build_graph<R>(f: R) -> Result<DiGraph<Node, String>>
+fn build_graph<R>(
+    f: R,
+    prefix: &[String],
+    nodes: &mut HashMap<String, NodeIndex<DefaultIx>>,
+    graph: &mut DiGraph<Node, String>,
+) -> Result<()>
 where
     R: Read,
 {
     let yaml: HashMap<String, Value> = serde_yaml::from_reader(f)?;
-    let mut graph: DiGraph<Node, _> = DiGraph::new();
-    let mut nodes = HashMap::new();
+    if let Some(incs) = yaml.get("includes") {
+        let namespaces = incs
+            .as_mapping()
+            .ok_or_else(|| anyhow!("includes is not a mapping"))?;
+        for (namespace, descr) in namespaces {
+            let name = namespace
+                .as_str()
+                .ok_or_else(|| anyhow!("namespace is not a string"))?;
+            let taskfile = match descr {
+                Value::String(s) => s,
+                Value::Mapping(m) => {
+                    m.get("taskfile").and_then(|t| t.as_str()).ok_or_else(
+                        || anyhow!("couldn't find taskfile name to include"),
+                    )?
+                }
+                _ => bail!("incorrect type for an include"),
+            };
+            let f = File::open(taskfile)?;
+            build_graph(f, &[prefix, &[name.into()]].concat(), nodes, graph)?;
+        }
+    }
     let task_section = &yaml
         .get("tasks")
         .ok_or_else(|| anyhow!("tasks not found"))?;
@@ -41,9 +67,10 @@ where
         let name = task
             .as_str()
             .ok_or_else(|| anyhow!("task name is not a string"))?;
+        let name = [prefix, &[name.into()]].concat().join(":");
         nodes
-            .entry(name)
-            .or_insert_with(|| graph.add_node(Node(name.into())));
+            .entry(name.clone())
+            .or_insert_with(|| graph.add_node(Node(name.clone())));
         let descr = descr
             .as_mapping()
             .ok_or_else(|| anyhow!("task description is not a mapping"))?;
@@ -60,18 +87,20 @@ where
                         .ok_or_else(|| anyhow!("couldn't find name of task"))?,
                     _ => bail!("incorrect type for a dependency"),
                 };
-                nodes
-                    .entry(dep_name)
-                    .or_insert_with(|| graph.add_node(Node(dep_name.into())));
+                let full_dep_name =
+                    [prefix, &[dep_name.into()]].concat().join(":");
+                nodes.entry(full_dep_name.clone()).or_insert_with(|| {
+                    graph.add_node(Node(full_dep_name.clone()))
+                });
                 graph.add_edge(
-                    nodes[dep_name],
-                    nodes[name],
-                    format!("{dep_name}:{name}"),
+                    nodes[&full_dep_name],
+                    nodes[&name],
+                    format!("{full_dep_name}-{name}"),
                 );
             }
         }
     }
-    Ok(graph)
+    Ok(())
 }
 
 fn graph_to_dot(g: &DiGraph<Node, String>) -> String {
@@ -151,7 +180,9 @@ fn main() -> Result<()> {
     let args = Args::parse();
     let taskfile = File::open("Taskfile.yaml")
         .map_err(|e| anyhow!("Taskfile.yaml: {e}"))?;
-    let graph = build_graph(taskfile)?;
+    let mut nodes = HashMap::new();
+    let mut graph: DiGraph<Node, _> = DiGraph::new();
+    build_graph(taskfile, &[], &mut nodes, &mut graph)?;
     let image = graph_to_image(&graph)?;
     if !image.status.success() {
         bail!("failed to create image: {}", image.status);
@@ -168,9 +199,14 @@ fn main() -> Result<()> {
 
 #[cfg(test)]
 mod test {
-    use crate::build_graph;
+    use crate::{build_graph, graph_to_image};
     use indoc::indoc;
-    use std::io::{Cursor, Result};
+    use petgraph::prelude::DiGraph;
+    use std::{
+        collections::HashMap,
+        fs::File,
+        io::{Cursor, Result, Write},
+    };
 
     #[test]
     fn test_build_graph() -> Result<()> {
@@ -194,9 +230,55 @@ mod test {
                eggs:
                  desc: no deps
             "#}));
-        let g = build_graph(yaml).unwrap();
+        let mut n = HashMap::new();
+        let mut g = DiGraph::new();
+        build_graph(yaml, &["foo".into()], &mut n, &mut g).unwrap();
         assert_eq!(g.node_count(), 5);
         assert_eq!(g.edge_count(), 4);
+        Ok(())
+    }
+
+    #[test]
+    fn test_build_graph_with_includes() -> Result<()> {
+        let inc1 = indoc! {r#"
+            tasks:
+              task1_inc1:
+                deps:
+                    - task2_inc1
+              task2_inc1:
+                descr: descr
+        "#};
+        let inc2 = indoc! {r#"
+            tasks:
+              task1_inc2:
+                foo: 1
+        "#};
+        let mut inc1_file = File::create("/tmp/inc1.yaml")?;
+        write!(&mut inc1_file, "{}", inc1)?;
+        let mut inc2_file = File::create("/tmp/inc2.yaml")?;
+        write!(&mut inc2_file, "{}", inc2)?;
+        let yaml = Cursor::new(String::from(indoc! {r#"
+             foo: 1
+             includes:
+               inc1: /tmp/inc1.yaml
+               inc2:
+                 taskfile: /tmp/inc2.yaml
+             tasks:
+               foo:
+                 deps:
+                   - bar
+                   - baz
+                   - inc1:task1_inc1
+                   - inc2:task1_inc2
+            "#}));
+        let mut n = HashMap::new();
+        let mut g = DiGraph::new();
+        build_graph(yaml, &[], &mut n, &mut g).unwrap();
+        let i = graph_to_image(&g).unwrap();
+        let mut out = File::create("/tmp/out.svg")?;
+        out.write_all(&i.stdout)?;
+        assert_eq!(g.node_count(), 6);
+        assert_eq!(g.edge_count(), 5);
         Ok(())
     }
 }
