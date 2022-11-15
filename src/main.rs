@@ -200,13 +200,14 @@ fn main() -> Result<()> {
 #[cfg(test)]
 mod test {
     use crate::{build_graph, graph_to_image};
-    use indoc::indoc;
+    use indoc::{formatdoc, indoc};
     use petgraph::prelude::DiGraph;
     use std::{
         collections::HashMap,
         fs::File,
         io::{Cursor, Result, Write},
     };
+    use tempdir::TempDir;
 
     #[test]
     fn test_build_graph() -> Result<()> {
@@ -253,16 +254,19 @@ mod test {
               task1_inc2:
                 foo: 1
         "#};
-        let mut inc1_file = File::create("/tmp/inc1.yaml")?;
+        let temp = TempDir::new("taskdep")?;
+        let inc1_filename = temp.path().join("inc1.yaml");
+        let inc2_filename = temp.path().join("inc2.yaml");
+        let mut inc1_file = File::create(&inc1_filename)?;
         write!(&mut inc1_file, "{}", inc1)?;
-        let mut inc2_file = File::create("/tmp/inc2.yaml")?;
+        let mut inc2_file = File::create(&inc2_filename)?;
         write!(&mut inc2_file, "{}", inc2)?;
-        let yaml = Cursor::new(String::from(indoc! {r#"
+        let yaml = Cursor::new(String::from(formatdoc! {r#"
              foo: 1
              includes:
-               inc1: /tmp/inc1.yaml
+               inc1: {f1}
                inc2:
-                 taskfile: /tmp/inc2.yaml
+                 taskfile: {f2}
              tasks:
                foo:
                  deps:
@@ -270,12 +274,16 @@ mod test {
                    - baz
                    - inc1:task1_inc1
                    - inc2:task1_inc2
-            "#}));
+            "#, 
+            f1 = inc1_filename.to_string_lossy(),
+            f2 = inc2_filename.to_string_lossy()
+        }));
         let mut n = HashMap::new();
         let mut g = DiGraph::new();
         build_graph(yaml, &[], &mut n, &mut g).unwrap();
         let i = graph_to_image(&g).unwrap();
-        let mut out = File::create("/tmp/out.svg")?;
+        let out_filename = temp.path().join("out.svg");
+        let mut out = File::create(out_filename)?;
         out.write_all(&i.stdout)?;
         assert_eq!(g.node_count(), 6);
         assert_eq!(g.edge_count(), 5);

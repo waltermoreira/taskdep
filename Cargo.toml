@@ -11,4 +11,5 @@ clap = { version = "3.2.8", features = ["derive"] }
 indoc = "1.0.7"
 petgraph = "0.6.2"
 serde_yaml = "0.9.10"
+tempdir = "0.3.7"
 webbrowser = "0.7.1"
