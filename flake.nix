@@ -12,9 +12,9 @@
 
   outputs = { self, nixpkgs, flake-utils, crane, shell-utils }:
 
-    flake-utils.lib.eachSystem [
-      flake-utils.lib.system.x86_64-linux
-      flake-utils.lib.system.x86_64-darwin
+    with flake-utils.lib; eachSystem [
+      system.x86_64-linux
+      system.x86_64-darwin
     ]
       (system:
         let
@@ -29,7 +29,6 @@
                 echo "In configure"
               '';
               src = craneLib.cleanCargoSource ./.;
-              #cargoTestCommand = "";
               buildInputs = with pkgs; [
                 graphviz
                 libiconv
@@ -37,12 +36,12 @@
             };
           packages.default = packages.taskdep;
           devShells.default = shell {
-            packages = [
-              pkgs.graphviz
+            packages = with pkgs; [
+              graphviz
               packages.taskdep
-              pkgs.cargo
-              pkgs.rustc
-              pkgs.go-task
+              cargo
+              rustc
+              go-task
             ];
           };
         });
