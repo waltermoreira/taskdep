@@ -35,7 +35,6 @@
           packages.default = packages.taskdep;
           devShells.default = shell {
             packages = with pkgs; [
-              graphviz
               packages.taskdep
               cargo
               rustc
