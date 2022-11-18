@@ -137,7 +137,8 @@ fn graph_to_dot(g: &DiGraph<Node, String>) -> String {
 
 fn graph_to_image(g: &DiGraph<Node, String>) -> Result<Output> {
     let contents = graph_to_dot(g);
-    let mut dot = Command::new("dot")
+    let dot_command = include_str!("dot.path").trim_end();
+    let mut dot = Command::new(dot_command)
         .arg("-Tsvg")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())

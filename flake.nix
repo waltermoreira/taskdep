@@ -1,8 +1,6 @@
 {
   description = "Draw dependency graphs from a Taskfile";
 
-  # Modify taskdep to get a path for `dot` that we pass at compilation time
-  # using a patch phase? or configure phase?
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs";
     flake-utils.url = "github:numtide/flake-utils";
@@ -26,7 +24,7 @@
           packages.taskdep =
             craneLib.buildPackage {
               configurePhase = ''
-                echo "In configure"
+                echo "${pkgs.graphviz}/bin/dot" > ./src/dot.path
               '';
               src = craneLib.cleanCargoSource ./.;
               buildInputs = with pkgs; [
