@@ -23,14 +23,12 @@
         rec {
           packages.taskdep =
             craneLib.buildPackage {
-              configurePhase = ''
-                echo "${pkgs.graphviz}/bin/dot" > ./src/dot.path
-              '';
               src = craneLib.cleanCargoSource ./.;
               buildInputs = with pkgs; [
                 graphviz
                 libiconv
               ];
+              DOTPATH = "${pkgs.graphviz}/bin/dot";
             };
           packages.default = packages.taskdep;
           devShells.default = shell {
