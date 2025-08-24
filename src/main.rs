@@ -180,7 +180,8 @@ struct Args {
 fn main() -> Result<()> {
     let args = Args::parse();
     let taskfile = File::open("Taskfile.yaml")
-        .map_err(|e| anyhow!("Taskfile.yaml: {e}"))?;
+        .or_else(|_| File::open("Taskfile.yml"))
+        .map_err(|e| anyhow!("Taskfile.{{yaml,yml}}: {e}"))?;
     let mut nodes = HashMap::new();
     let mut graph: DiGraph<Node, _> = DiGraph::new();
     build_graph(taskfile, &[], &mut nodes, &mut graph)?;
